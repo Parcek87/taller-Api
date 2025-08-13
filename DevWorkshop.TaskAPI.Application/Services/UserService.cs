@@ -1,5 +1,8 @@
+using AutoMapper;
 using DevWorkshop.TaskAPI.Application.DTOs.Users;
 using DevWorkshop.TaskAPI.Application.Interfaces;
+using DevWorkshop.TaskAPI.Domain.Entities;
+using Microsoft.Extensions.Logging;
 
 namespace DevWorkshop.TaskAPI.Application.Services;
 
@@ -9,10 +12,16 @@ namespace DevWorkshop.TaskAPI.Application.Services;
 public class UserService : IUserService
 {
     // TODO: ESTUDIANTE - Inyectar dependencias necesarias (DbContext, AutoMapper, Logger)
-    
-    public UserService()
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly IMapper _mapper;
+    private readonly ILogger<UserService> _logger;
+
+    public UserService(IUnitOfWork unitOfWork, IMapper mapper, ILogger<UserService> logger)
     {
         // TODO: ESTUDIANTE - Configurar las dependencias inyectadas
+        _unitOfWork = unitOfWork;
+        _mapper = mapper;
+        _logger = logger;
     }
 
     /// <summary>
@@ -75,7 +84,34 @@ public class UserService : IUserService
     public async Task<UserDto> CreateUserAsync(CreateUserDto createUserDto)
     {
         // TODO: ESTUDIANTE - Implementar lógica
-        throw new NotImplementedException("Método pendiente de implementación por el estudiante");
+        try
+        {
+            var emailformat = createUserDto.Email.Trim().ToLower();
+            var validuser = await _unitOfWork.Users.FirstOrDefaultAsync(u => u.Email == emailformat);
+            if (validuser != null)
+            {
+                throw new InvalidOperationException("usuario ya creado");
+            }
+            var passwordHash = BCrypt.Net.BCrypt.HashPassword(createUserDto.Password);
+
+            var user = _mapper.Map<User>(createUserDto);
+            user.Email = emailformat;
+            user.PasswordHash = passwordHash;
+            user.CreatedAt = DateTime.Now;
+            user.UpdatedAt = DateTime.Now;
+            user.LastTokenIssueAt = DateTime.Now;
+            user.RoleId = 4;
+
+            var createdUser = await _unitOfWork.Users.AddAsync(user);
+            await _unitOfWork.SaveChangesAsync();
+
+            return _mapper.Map<UserDto>(createdUser);
+        }
+        catch (Exception ex) 
+        {
+            throw;
+        }
+        
     }
 
     /// <summary>
